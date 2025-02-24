@@ -125,9 +125,9 @@ const constructLineItem = (
       "cac:Price": {
         "cbc:PriceAmount": {
           "@_currencyID": "SAR",
-          "#text": new Decimal(
-            line_item.tax_exclusive_price - line_discounts
-          ).toFixed(14),
+          "#text": new Decimal(line_item.tax_exclusive_price)
+            .minus(new Decimal(line_discounts))
+            .toFixed(14),
         },
         "cac:AllowanceCharge": cacAllowanceCharges,
       },
