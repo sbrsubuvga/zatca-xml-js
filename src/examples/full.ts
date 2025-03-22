@@ -67,6 +67,8 @@ const egsunit: EGSUnitInfo = {
   branch_industry: "Food",
 };
 
+const egsunitList: EGSUnitInfo[] = [egsunit]; // Add your multiple EGS units here
+
 // Sample Invoice
 const invoice = new ZATCAInvoice({
   props: {
@@ -90,35 +92,46 @@ const main = async () => {
     // Enable for windows
     // process.env.TEMP_FOLDER = `${require("os").tmpdir()}\\`;
 
-    // Init a new EGS
-    const egs = new EGS(egsunit);
+    // Init a new EGS for each unit
+    for (let egsunit of egsunitList) {
+      const egs = new EGS(egsunit);
 
-    // New Keys & CSR for the EGS
-    await egs.generateNewKeysAndCSR(false, "solution_name");
+      // Check if the EGS already has a compliance certificate
+      if (!egsunit.compliance_request_id || !egsunit.compliance_request_id) {
+        // New Keys & CSR for the EGS
+        const {private_key,csr} =await egs.generateNewKeysAndCSR(false, "solution_name");
+        egsunit.private_key=private_key; 
+        egsunit.csr=csr; 
 
-    // Issue a new compliance cert for the EGS
-    const compliance_request_id = await egs.issueComplianceCertificate(
-      "123345"
-    );
-    const production_request_id = await egs.issueProductionCertificate(
-      compliance_request_id
-    );
+        // Issue a new compliance cert for the EGS
+        const {issued_certificate,api_secret,request_id} = await egs.issueComplianceCertificate(
+          "123345"
+        );
+        egsunit.compliance_certificate = issued_certificate; // Store the compliance request ID
+        egsunit.compliance_api_secret = api_secret; // Store the compliance request ID
+        egsunit.compliance_request_id = request_id; // Store the compliance request ID
 
-    // Sign invoice
-    const { signed_invoice_string, invoice_hash, qr } = egs.signInvoice(
-      invoice,
-      true
-    );
-    // Check invoice compliance
-    console.log(
-      await egs.checkInvoiceCompliance(signed_invoice_string, invoice_hash)
-    );
+        // const {issued_certificate,api_secret,request_id} = await egs.issueProductionCertificate(request_id);
+        // egsunit.production_certificate = issued_certificate; // Store the compliance request ID
+        // egsunit.production_api_secret = api_secret; // Store the compliance request ID
+        // egsunit.production_request_id = request_id; // Store the compliance request ID
+      }
 
-    // Issue production certificate
-    // Report invoice production
-    // Note: This request currently fails because ZATCA sandbox returns a constant fake production certificate
-    let response = await egs.reportInvoice(signed_invoice_string, invoice_hash);
-    console.log(JSON.stringify(response));
+      // Sign invoice
+      const { signed_invoice_string, invoice_hash, qr } = egs.signInvoice(
+        invoice,
+        true
+      );
+      // Check invoice compliance
+      console.log(
+        await egs.checkInvoiceCompliance(signed_invoice_string, invoice_hash)
+      );
+
+      // Report invoice production
+      // Note: This request currently fails because ZATCA sandbox returns a constant fake production certificate
+      let response = await egs.reportInvoice(signed_invoice_string, invoice_hash);
+      console.log(JSON.stringify(response));
+    }
   } catch (error: any) {
     console.log(error.message ?? error);
     console.log(JSON.stringify(error.response?.data));

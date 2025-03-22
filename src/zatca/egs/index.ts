@@ -53,6 +53,8 @@ export interface EGSUnitInfo {
     compliance_api_secret?: string,
     production_certificate?: string,
     production_api_secret?: string,
+    production_request_id?: string,
+    compliance_request_id?: string,
 }
 
 const OpenSSL = (cmd: string[]): Promise<string> => {
@@ -169,13 +171,14 @@ export class EGS {
      * @param solution_name String name of solution generating certs.
      * @returns Promise void on success, throws error on fail.
      */
-    async generateNewKeysAndCSR(production: boolean, solution_name: string): Promise<any> {
+    async generateNewKeysAndCSR(production: boolean, solution_name: string): Promise<{private_key:string, csr:string}> {
         try {
             const new_private_key = await generateSecp256k1KeyPair();
             this.egs_info.private_key = new_private_key;
 
             const new_csr = await generateCSR(this.egs_info, production, solution_name);    
             this.egs_info.csr = new_csr;
+            return {private_key:new_private_key, csr:new_csr};
         } catch (error) {
             throw error;
         }
@@ -187,14 +190,19 @@ export class EGS {
      * @param OTP String Tax payer provided from Fatoora portal to link to this EGS.
      * @returns Promise String compliance request id on success to be used in production CSID request, throws error on fail.
      */
-    async issueComplianceCertificate(OTP: string): Promise<string> {
+    async issueComplianceCertificate(OTP: string): Promise<{
+        issued_certificate: string;
+        api_secret: string;
+        request_id: string;
+    }> {
         if (!this.egs_info.csr) throw new Error("EGS needs to generate a CSR first.");
 
         const issued_data = await this.api.compliance().issueCertificate(this.egs_info.csr, OTP);
         this.egs_info.compliance_certificate = issued_data.issued_certificate;
         this.egs_info.compliance_api_secret = issued_data.api_secret;
+        this.egs_info.compliance_request_id = issued_data.request_id;
 
-        return issued_data.request_id;
+        return issued_data;
     }
 
     /**
@@ -202,14 +210,19 @@ export class EGS {
      * @param compliance_request_id String compliance request ID generated from compliance CSID request.
      * @returns Promise String request id on success, throws error on fail.
      */
-     async issueProductionCertificate(compliance_request_id: string): Promise<string> {
+     async issueProductionCertificate(compliance_request_id: string): Promise<{
+        issued_certificate: string;
+        api_secret: string;
+        request_id: string;
+    }> {
         if(!this.egs_info.compliance_certificate || !this.egs_info.compliance_api_secret) throw new Error("EGS is missing a certificate/private key/api secret to request a production certificate.")
 
         const issued_data = await this.api.production(this.egs_info.compliance_certificate, this.egs_info.compliance_api_secret).issueCertificate(compliance_request_id);
         this.egs_info.production_certificate = issued_data.issued_certificate;
         this.egs_info.production_api_secret = issued_data.api_secret;
+        this.egs_info.compliance_request_id = issued_data.request_id;
         
-        return issued_data.request_id;
+        return issued_data;
     }
 
     /**
